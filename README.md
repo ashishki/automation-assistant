@@ -1,8 +1,8 @@
 # Automation Assistant
 
+LLM-powered workflow generator for n8n, Python, Poetry, Docker.
 
-
-## Installing
+## Setup
 
 ```bash
 poetry install
