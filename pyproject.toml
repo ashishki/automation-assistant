@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "automation-assistant"
+version = "0.1.0"
+description = "Automation workflow generator using LLM and n8n"
+authors = ["Artem Shishkin <verter25@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+openai = "^1.88.0"
+requests = "^2.32.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
