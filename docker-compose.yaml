@@ -1,19 +1,24 @@
-version: "3.8"
 services:
   n8n:
-    image: n8nio/n8n
+    image: n8nio/n8n:latest
     ports:
       - "5678:5678"
-    env_file:
-      - .env.n8n
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_PUBLIC_API_DISABLED=false
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+
+      # ↓ эти две строчки заставят n8n отдавать сессионную куку по HTTP  
+      - N8N_SECURE_COOKIE=false  
+      - N8N_COOKIE_SECURE=false
+
     volumes:
-      - n8n_data:/home/node/.n8n
+      - ./n8n_data:/home/node/.n8n
 
   automation-assistant:
     build: .
-    env_file: .env
+    env_file:
+      - .env
     depends_on:
       - n8n
-
-volumes:
-  n8n_data:
