@@ -5,15 +5,29 @@ from jsonschema import validate, ValidationError
 
 PLAN_SCHEMA = {
     "type": "object",
-    "required": ["trigger", "schedule", "actions"],
     "properties": {
-        "trigger": {"type": "string"},
-        "schedule": {"type": "string"},
-        "actions": {
+        "nodes": {
             "type": "array",
-            "items": {"type": "string"}
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "type": {"type": "string"},
+                    "parameters": {"type": "object"},
+                },
+                "required": ["id", "type"]
+            },
+            "minItems": 1
+        },
+        "connections": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
         }
     },
+    "required": ["nodes", "connections"],
     "additionalProperties": False
 }
 
@@ -39,12 +53,13 @@ class SafetyValidator:
         return True
 
     def validate_plan(self, plan: dict) -> bool:
-        """
-        Validate the workflow plan against a JSON Schema.
-        """
         try:
-            validate(instance=plan, schema=PLAN_SCHEMA)
+            # Simple: branch on structure
+            if "nodes" in plan and "connections" in plan:
+                validate(plan, PLAN_SCHEMA)
+            else:
+                validate(plan, PLAN_SCHEMA)
+            return True
         except ValidationError as e:
-            print(f"Plan validation error: {e}")
+            print("Plan validation error:", e)
             return False
-        return True

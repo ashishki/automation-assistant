@@ -10,6 +10,7 @@ def login_and_fetch_session(n8n_url: str, email: str, password: str) -> requests
     """
     Log in via /rest/login (form data), return a session with the auth cookie.
     """
+    
     sess = requests.Session()
     resp = sess.post(
         f"{n8n_url}/rest/login",
@@ -22,13 +23,25 @@ def login_and_fetch_session(n8n_url: str, email: str, password: str) -> requests
     resp.raise_for_status()
     return sess
 
+def fetch_workflows(session: requests.Session, n8n_url: str) -> list:
+    """
+    Fetch workflows using the authenticated session.
+    """
+    resp = session.get(f"{n8n_url}/rest/workflows")
+    resp.raise_for_status()
+    return resp.json().get("data", [])
+
 def main():
     # Load .env variables
     load_dotenv()
     n8n_url = os.getenv("N8N_API_URL")           # http://localhost:5678
     email   = os.getenv("N8N_USER_EMAIL")
     pwd     = os.getenv("N8N_USER_PASSWORD")
-
+    prompt = os.getenv("PROMPT")
+    if not prompt:
+        prompt = input("Enter your workflow request (in English): ")
+    print("DEBUG: prompt =", prompt)
+    
     if not (n8n_url and email and pwd):
         print("ERROR: Missing N8N_API_URL or login credentials")
         return
@@ -48,8 +61,6 @@ def main():
     # Give n8n a bit of time to initialize completely
     time.sleep(2)
 
-    # Step 2: Get user prompt
-    prompt = input("Enter your workflow request (in English): ")
 
     # Step 3: Validate prompt for safety
     validator = SafetyValidator()
@@ -80,10 +91,14 @@ def main():
         return
 
     # Step 7: Show result
+    if "data" in workflow:
+        workflow_data = workflow["data"]
+    else:
+        workflow_data = workflow
     print(f"\nWorkflow created successfully in n8n!")
-    print(f"Workflow ID: {workflow.get('id')}")
-    print(f"Workflow name: {workflow.get('name')}")
-    print(f"Check it in the n8n UI: {n8n_url}/workflow/{workflow.get('id')}")
+    print(f"Workflow ID: {workflow_data.get('id')}")
+    print(f"Workflow name: {workflow_data.get('name')}")
+    print(f"Check it in the n8n UI: {n8n_url}/workflow/{workflow_data.get('id')}")
 
 if __name__ == "__main__":
     main()
