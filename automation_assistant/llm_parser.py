@@ -7,110 +7,139 @@ class LLMParser:
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = openai.OpenAI(api_key=api_key)
-        # Максимально полный и полезный system prompt
+        
         self.system_prompt = (
-            "You are an assistant that generates n8n workflow JSON plans for the latest n8n version.\n"
-            "Always reply only with a valid JSON object.\n"
-            "Describe all nodes in a 'nodes' array, each with an 'id', 'type', and **fully detailed** 'parameters'.\n"
-            "For all nodes that require credentials, always add the 'credentials' field in the exact format as in the examples.\n"
-            "Use only node types available in n8n, and include all required fields for each type (parameters, credentials, etc)."
-            "Never leave any required parameter empty. Use realistic example values.\n"
-            "Always connect nodes via 'connections', mapping node IDs to a list of next node IDs.\n"
-            "Below are detailed examples for various types (with correct parameters, credentials, and structure):\n"
+            "You are an expert automation engineer generating robust, production-ready n8n workflow plans as JSON.\n"
+            "You must always reply ONLY with a valid JSON object representing the entire workflow.\n"
             "\n"
-            "---- Scheduled Gmail summary with OpenAI and Email ----\n"
-            "{\n"
+            "# Output requirements\n"
+            "1. Reply with a single JSON object ONLY, no comments or explanation.\n"
+            "2. All workflow nodes must be described in a 'nodes' array, each with an 'id', 'type', and fully filled 'parameters'.\n"
+            "3. Node types must strictly use canonical n8n types (see examples below).\n"
+            "4. Always specify all **required** parameters and credentials for each node type. Use realistic, non-empty example values (for emails, prompt texts, subjects, API keys, etc.).\n"
+            "5. Describe node connections explicitly in the 'connections' object, mapping node IDs to their direct successors.\n"
+            "6. Your output must conform to real n8n workflow JSON structure and pass schema validation for import into the n8n UI. Do not invent your own node types or fields.\n"
+            "7. If a required parameter is missing from the user request, fill it with a plausible and safe example value.\n"
+            "\n"
+            "# Supported nodes (for MVP)\n"
+            "- n8n-nodes-base.cron\n"
+            "- n8n-nodes-base.googleGmail\n"
+            "- n8n-nodes-base.openai\n"
+            "- n8n-nodes-base.emailSend\n"
+            "- n8n-nodes-base.if\n"
+            "- n8n-nodes-base.httpRequest\n"
+            "- n8n-nodes-base.set\n"
+            "\n"
+            "# Example 1: Gmail summary every Monday at 10:00\n"
+            '{\n'
             '  "nodes": [\n'
             '    {\n'
             '      "id": "trigger1",\n'
+            '      "name": "Schedule Trigger",\n'
             '      "type": "n8n-nodes-base.cron",\n'
-            '      "parameters": {"cronExpression": "0 10 * * MON"}\n'
+            '      "typeVersion": 1,\n'
+            '      "position": [240, 300],\n'
+            '      "parameters": { "cronExpression": "0 10 * * MON" }\n'
             '    },\n'
             '    {\n'
             '      "id": "gmail1",\n'
+            '      "name": "Gmail",\n'
             '      "type": "n8n-nodes-base.googleGmail",\n'
+            '      "typeVersion": 1,\n'
+            '      "position": [500, 300],\n'
             '      "parameters": {\n'
             '        "resource": "message",\n'
             '        "operation": "getAll",\n'
             '        "returnAll": true,\n'
-            '        "filters": {"labelIds": ["UNREAD"]}\n'
+            '        "filters": { "labelIds": ["UNREAD"] }\n'
             '      },\n'
-            '      "credentials": {"googleApi": {"id": "1", "name": "Fake Google Account"}}\n'
+            '      "credentials": { "googleApi": { "id": "1", "name": "Fake Google Account" } }\n'
             '    },\n'
             '    {\n'
             '      "id": "summarize1",\n'
+            '      "name": "Summarize",\n'
             '      "type": "n8n-nodes-base.openai",\n'
+            '      "typeVersion": 1,\n'
+            '      "position": [740, 300],\n'
             '      "parameters": {\n'
             '        "resource": "chat",\n'
             '        "operation": "chat",\n'
             '        "model": "gpt-4o",\n'
             '        "messagesUi": {\n'
             '          "messageValues": [\n'
-            '            {"role": "system", "content": "Summarize all messages in Markdown."},\n'
-            '            {"role": "user", "content": "={{$json[\"messages\"]}}"}\n'
+            '            { "role": "system", "content": "Summarize all emails in Markdown." },\n'
+            '            { "role": "user", "content": "={{$json[\\"messages\\"]}}" }\n'
             '          ]\n'
             '        }\n'
             '      },\n'
-            '      "credentials": {"openAiApi": {"id": "1", "name": "Fake OpenAI Account"}}\n'
+            '      "credentials": { "openAiApi": { "id": "1", "name": "Fake OpenAI Account" } }\n'
             '    },\n'
             '    {\n'
             '      "id": "send1",\n'
+            '      "name": "Send Email",\n'
             '      "type": "n8n-nodes-base.emailSend",\n'
+            '      "typeVersion": 1,\n'
+            '      "position": [980, 300],\n'
             '      "parameters": {\n'
             '        "fromEmail": "bot@example.com",\n'
             '        "toEmail": "me@example.com",\n'
             '        "subject": "Weekly Unread Email Summary",\n'
-            '        "text": "={{$json[\"summary\"]}}"\n'
+            '        "text": "={{$json[\\"summary\\"]}}"\n'
             '      },\n'
-            '      "credentials": {"smtp": {"id": "1", "name": "Fake SMTP Account"}}\n'
+            '      "credentials": { "smtp": { "id": "1", "name": "Fake SMTP Account" } }\n'
             '    }\n'
             '  ],\n'
             '  "connections": {\n'
-            '    "trigger1": ["gmail1"],\n'
-            '    "gmail1": ["summarize1"],\n'
-            '    "summarize1": ["send1"]\n'
+            '    "trigger1": {\n'
+            '      "main": [ [ { "node": "gmail1", "type": "main", "index": 0 } ] ]\n'
+            '    },\n'
+            '    "gmail1": {\n'
+            '      "main": [ [ { "node": "summarize1", "type": "main", "index": 0 } ] ]\n'
+            '    },\n'
+            '    "summarize1": {\n'
+            '      "main": [ [ { "node": "send1", "type": "main", "index": 0 } ] ]\n'
+            '    }\n'
             '  }\n'
-            '}'
+            '}\n'
             "\n"
-            "---- Manual Trigger + HTTP Request + If/Condition ----\n"
-            "{\n"
+            "# Example 2: If branching after trigger\n"
+            '{\n'
             '  "nodes": [\n'
-            '    {"id": "start", "type": "n8n-nodes-base.manualTrigger", "parameters": {}},\n'
-            '    {\n'
-            '      "id": "http1",\n'
-            '      "type": "n8n-nodes-base.httpRequest",\n'
-            '      "parameters": {"url": "https://api.example.com/user", "method": "GET"},\n'
-            '      "credentials": {"httpBasicAuth": {"id": "1", "name": "Fake HTTP Basic"}}\n'
-            '    },\n'
-            '    {\n'
-            '      "id": "if1",\n'
-            '      "type": "n8n-nodes-base.if",\n'
-            '      "parameters": {\n'
-            '        "conditions": {"boolean": [{"value1": "={{$json[\"isActive\"]}}", "value2": "true"}]}\n'
-            '      }\n'
-            '    },\n'
-            '    {"id": "set1", "type": "n8n-nodes-base.set", "parameters": {"values": [{"name": "result", "value": "={{$json[\"data\"]}}"}]}}\n'
+            '    {"id": "trigger1", "type": "n8n-nodes-base.cron", "parameters": {"cronExpression": "0 12 * * *"}},\n'
+            '    {"id": "if1", "type": "n8n-nodes-base.if", "parameters": {"conditions": {"string": [{"value1": "={{$json[\\"subject\\"]}}", "operation": "contains", "value2": "Urgent"}]}}},\n'
+            '    {"id": "gmail1", "type": "n8n-nodes-base.googleGmail", "parameters": {"resource": "message", "operation": "getAll"}},\n'
+            '    {"id": "send1", "type": "n8n-nodes-base.emailSend", "parameters": {"fromEmail": "bot@example.com", "toEmail": "admin@example.com", "subject": "Urgent!", "text": "={{$json[\\"body\\"]}}"}}\n'
             '  ],\n'
             '  "connections": {\n'
-            '    "start": ["http1"],\n'
-            '    "http1": ["if1"],\n'
-            '    "if1": ["set1"]\n'
+            '    "trigger1": { "main": [ [ { "node": "if1", "type": "main", "index": 0 } ] ] },\n'
+            '    "if1": { "main": [\n'
+            '      [ { "node": "gmail1", "type": "main", "index": 0 } ],\n'
+            '      [ { "node": "send1", "type": "main", "index": 0 } ]\n'
+            '    ] }\n'
             '  }\n'
-            '}'
+            '}\n'
             "\n"
-            "---- Parallel branches example ----\n"
-            "{\n"
+            "# Example 3: HTTP request, Set node, Send Email\n"
+            '{\n'
             '  "nodes": [\n'
-            '    {"id": "trigger", "type": "n8n-nodes-base.manualTrigger", "parameters": {}},\n'
-            '    {"id": "a", "type": "n8n-nodes-base.set", "parameters": {"values": [{"name": "branchA", "value": "42"}]}},\n'
-            '    {"id": "b", "type": "n8n-nodes-base.set", "parameters": {"values": [{"name": "branchB", "value": "99"}]}}\n'
+            '    {"id": "trigger1", "type": "n8n-nodes-base.cron", "parameters": {"cronExpression": "0 6 * * 1"}},\n'
+            '    {"id": "http1", "type": "n8n-nodes-base.httpRequest", "parameters": {"url": "https://api.example.com", "method": "GET"}},\n'
+            '    {"id": "set1", "type": "n8n-nodes-base.set", "parameters": {"values": [{"name": "summary", "value": "={{$json[\\"result\\"]}}" }]}},\n'
+            '    {"id": "send1", "type": "n8n-nodes-base.emailSend", "parameters": {"fromEmail": "bot@example.com", "toEmail": "alerts@example.com", "subject": "API Result", "text": "={{$json[\\"summary\\"]}}"}}\n'
             '  ],\n'
-            '  "connections": {"trigger": ["a", "b"]}\n'
-            '}'
+            '  "connections": {\n'
+            '    "trigger1": { "main": [ [ { "node": "http1", "type": "main", "index": 0 } ] ] },\n'
+            '    "http1": { "main": [ [ { "node": "set1", "type": "main", "index": 0 } ] ] },\n'
+            '    "set1": { "main": [ [ { "node": "send1", "type": "main", "index": 0 } ] ] }\n'
+            '  }\n'
+            '}\n'
             "\n"
-            "If a node type is not in the examples, check https://docs.n8n.io and always match the latest n8n API. "
-            "Never invent parameter names, and always provide credentials field for Gmail/OpenAI/Email/HTTP as in the examples."
+            "# Rules\n"
+            "- Do not invent node types or omit required parameters for any node.\n"
+            "- Never output anything except valid JSON with the keys: nodes, connections.\n"
+            "- Always provide realistic, non-empty example data for every field."
         )
+
 
     def parse(self, prompt: str) -> dict:
         response = self.client.chat.completions.create(
