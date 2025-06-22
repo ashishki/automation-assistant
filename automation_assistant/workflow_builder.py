@@ -1,4 +1,5 @@
 import uuid
+import json
 
 N8N_NODE_TYPES = {
     "schedule": "n8n-nodes-base.cron",
@@ -8,58 +9,102 @@ N8N_NODE_TYPES = {
     "if": "n8n-nodes-base.if",
 }
 
-
 FAKE_CREDENTIALS = {
     "n8n-nodes-base.googleGmail": {"googleApi": {"id": "1", "name": "Fake Google Account"}},
     "n8n-nodes-base.openai": {"openAiApi": {"id": "1", "name": "Fake OpenAI Account"}},
     "n8n-nodes-base.emailSend": {"smtp": {"id": "1", "name": "Fake SMTP Account"}},
-    "n8n-nodes-base.httpRequest": {"httpBasicAuth": {"id": "1", "name": "Fake HTTP Basic"}}
+    "n8n-nodes-base.httpRequest": {"httpBasicAuth": {"id": "1", "name": "Fake HTTP Basic"}},
+    "n8n-nodes-base.itemLists": {},
 }
 
-
+# Updated parameters for modern n8n version
 DEFAULT_NODE_PARAMETERS = {
     "n8n-nodes-base.cron": {
-        "cronExpression": "0 10 * * MON"
+        "mode": "everyWeek",
+        "dayOfWeek": [1],  # Monday
+        "hour": 10,
+        "minute": 0,
+        "timezone": "UTC"
     },
     "n8n-nodes-base.googleGmail": {
         "resource": "message",       
         "operation": "getAll",
         "returnAll": True,
-        "filters": {"labelIds": ["UNREAD"]}
+        "limit": 50,
+        "simple": False,
+        "filters": {
+            "labelIds": ["UNREAD"],
+            "includeSpamTrash": False
+        },
+        "options": {
+            "attachments": False,
+            "format": "full"
+        }
     },
     "n8n-nodes-base.openai": {
         "resource": "chat",          
         "operation": "chat",         
-        "model": "gpt-4o",
+        "model": "gpt-4o-mini",
+        "options": {
+            "temperature": 0.3,
+            "maxTokens": 1000
+        },
         "messagesUi": {
             "messageValues": [
-                {"role": "system", "content": "Summarize the emails in Markdown."},
-                {"role": "user", "content": "={{$json[\"messages\"]}}"}
+                {
+                    "role": "system", 
+                    "content": "You are a helpful assistant that summarizes emails. Create a concise summary in markdown format."
+                },
+                {
+                    "role": "user", 
+                    "content": "Please summarize these emails:\n\n={{$json.map(email => `Subject: ${email.subject}\\nFrom: ${email.from}\\nSnippet: ${email.snippet}`).join('\\n\\n')}}"
+                }
             ]
-        }
+        },
+        "simplifyOutput": False
     },
     "n8n-nodes-base.emailSend": {
-        "fromEmail": "bot@example.com",
-        "toEmail": "me@example.com",
-        "subject": "Weekly Unread Email Summary",
-        "text": "={{$json[\"summary\"]}}"
+        "fromEmail": "noreply@yourdomain.com",
+        "toEmail": "user@example.com",
+        "subject": "📧 Weekly Email Summary - {{$now.format('YYYY-MM-DD')}}",
+        "message": "={{$json.message.content || $json}}",
+        "options": {
+            "allowUnauthorizedCerts": False,
+            "replyTo": "",
+            "cc": "",
+            "bcc": ""
+        },
+        "transport": "smtp"
     }
 }
 
-
 def fill_missing_parameters_and_creds(node):
+    """
+    Fill missing parameters and credentials for n8n node
+    """
     ntype = node["type"]
+    
     # Fill default params
     params = node.get("parameters", {})
     defaults = DEFAULT_NODE_PARAMETERS.get(ntype, {})
+    
+    # Deep merge parameters
     for k, v in defaults.items():
         if k not in params:
             params[k] = v
+        elif isinstance(v, dict) and isinstance(params[k], dict):
+            # Merge nested dictionaries
+            merged = v.copy()
+            merged.update(params[k])
+            params[k] = merged
+    
     node["parameters"] = params
-    # Fill credentials in правильном формате
+    
+    # Fill credentials
     creds = FAKE_CREDENTIALS.get(ntype)
     if creds:
         node["credentials"] = creds
+    
     return node
 
 class WorkflowBuilder:
@@ -69,75 +114,193 @@ class WorkflowBuilder:
 
     def create_workflow(self, plan: dict) -> dict:
         nodes = self._build_nodes(plan)
-        self._validate_nodes(nodes)  # <- добавлено
+        connections = self._build_connections(plan, nodes)
+
+        
+        for node in nodes:
+            
+            if node.get("type") in ["n8n-nodes-base.cron", "n8n-nodes-base.manualTrigger"]:
+                node.pop("credentials", None)
+            elif "credentials" in node and not node["credentials"]:
+                node.pop("credentials", None)
+
+            
+            if node.get("type") == "n8n-nodes-base.emailSend":
+                if "message" in node["parameters"]:
+                    node["parameters"]["text"] = node["parameters"].pop("message")
+                
+                for opt in ["cc", "bcc", "replyTo", "html", "attachments", "options"]:
+                    if opt in node["parameters"] and not node["parameters"][opt]:
+                        del node["parameters"][opt]
+       
+
         workflow = {
-            "name": f"Workflow {str(uuid.uuid4())[:8]}",
+            "name": f"AI Generated Workflow {str(uuid.uuid4())[:8]}",
             "nodes": nodes,
-            "connections": self._build_connections(plan, nodes),
+            "connections": connections,
             "active": False
         }
+        self._validate_workflow(workflow)
+        print(json.dumps(workflow, indent=2))  
         response = self.session.post(f"{self.n8n_url}/rest/workflows", json=workflow)
         response.raise_for_status()
-        print("DEBUG: raw workflow response", response.json(), flush=True)
-        return response.json().get("data", response.json())
+        result = response.json()
+        print("DEBUG: Workflow created successfully", result.get("data", {}).get("id"), flush=True)
+        return result.get("data", result)
+
 
     def _build_nodes(self, plan: dict) -> list:
+        """
+        Build n8n nodes from plan
+        """
         nodes = []
-        x0, y0 = 300, 300
-        dx, dy = 200, 170
-        if "nodes" in plan:
+        
+        if "nodes" in plan and plan["nodes"]:
             for idx, node in enumerate(plan["nodes"]):
-                n8n_type = N8N_NODE_TYPES.get(node["type"], node["type"])
-                name = node.get("name", node["id"])
-                n = {
-                    "id": node["id"],
+                ntype = N8N_NODE_TYPES.get(node.get("type"), node.get("type"))
+                name = node.get("name", node.get("id", f"Node {idx+1}"))
+                
+                node_obj = {
+                    "id": node.get("id", f"node_{idx+1}"),
                     "name": name,
-                    "type": n8n_type,
-                    "typeVersion": 1,
+                    "type": ntype,
+                    "typeVersion": node.get("typeVersion", 1),
                     "parameters": node.get("parameters", {}),
-                    "position": [x0 + (idx * dx), y0 + ((idx % 2) * dy)]
+                    "position": node.get("position", [240 + idx*220, 300]),
+                    "disabled": False,
+                    "notes": f"Auto-generated {ntype.split('.')[-1]} node",
+                    "notesInFlow": False
                 }
-                n = fill_missing_parameters_and_creds(n)
-                nodes.append(n)
-            return nodes
-        # fallback (legacy)
-        return []
+                
+                # Fill missing parameters and credentials
+                node_obj = fill_missing_parameters_and_creds(node_obj)
+                nodes.append(node_obj)
+        
+        return nodes
 
     def _build_connections(self, plan: dict, nodes: list) -> dict:
-        """
-        Converts plan['connections'] {from_id: [to_id, ...]} to n8n format.
-        """
-        if "connections" not in plan or "nodes" not in plan:
+        if not nodes:
             return {}
-        node_id_to_name = {n["id"]: n["name"] for n in nodes}
+
+        id2name = {n["id"]: n["name"] for n in nodes}
+        node_names = [n["name"] for n in nodes]
+
+        # Step 1: если есть connections — нормализуем по name
         n8n_conns = {}
-        for from_id, to_ids in plan["connections"].items():
-            if from_id not in node_id_to_name:
-                continue  # некорректная связь
-            from_name = node_id_to_name[from_id]
-            n8n_conns[from_name] = {"main": [
-                [
-                    {
-                        "node": node_id_to_name[to_id],
-                        "type": "main",
-                        "index": 0
-                    } for to_id in to_ids if to_id in node_id_to_name
-                ]
-            ]}
+        if "connections" in plan and plan["connections"]:
+            for from_any, to_list in plan["connections"].items():
+                # Маппим и id, и name → name
+                from_name = id2name.get(from_any, from_any)
+                if from_name not in node_names:
+                    continue
+
+                connections_list = []
+                for to_any in to_list:
+                    to_name = id2name.get(to_any, to_any)
+                    if to_name in node_names:
+                        connections_list.append({
+                            "node": to_name,
+                            "type": "main",
+                            "index": 0
+                        })
+                if connections_list:
+                    n8n_conns[from_name] = {"main": [connections_list]}
+
+            # Если связей не получилось (пустой граф) — автосвязь
+            if not n8n_conns and len(nodes) > 1:
+                for i in range(len(node_names) - 1):
+                    n8n_conns[node_names[i]] = {
+                        "main": [[{"node": node_names[i + 1], "type": "main", "index": 0}]]
+                    }
+            return n8n_conns
+
+        # Step 2: если нет connections — автосвязь
+        if len(nodes) < 2:
+            return {}
+        for i in range(len(node_names) - 1):
+            n8n_conns[node_names[i]] = {
+                "main": [[{"node": node_names[i + 1], "type": "main", "index": 0}]]
+            }
         return n8n_conns
+
+
+    def _validate_workflow(self, workflow: dict):
+        """
+        Validate workflow structure before creation
+        """
+        if not workflow.get("nodes"):
+            raise ValueError("Workflow must have at least one node")
+        
+        # Check for required node fields
+        for node in workflow["nodes"]:
+            required_fields = ["id", "name", "type", "parameters"]
+            missing = [f for f in required_fields if f not in node]
+            if missing:
+                raise ValueError(f"Node missing required fields: {missing}")
+        
+        # Validate connections reference existing nodes
+        node_names = {n["name"] for n in workflow["nodes"]}
+        connections = workflow.get("connections", {})
+        
+        for from_node, conn_data in connections.items():
+            if from_node not in node_names:
+                raise ValueError(f"Connection references non-existent node: {from_node}")
+            
+            if "main" in conn_data:
+                for conn_list in conn_data["main"]:
+                    for conn in conn_list:
+                        if conn["node"] not in node_names:
+                            raise ValueError(f"Connection references non-existent target node: {conn['node']}")
 
     def _validate_nodes(self, nodes: list):
         """
-        Checks for all required parameters in nodes.
-        Throws ValueError if any required param is missing.
+        Validate individual nodes for completeness
         """
         for node in nodes:
-            required = DEFAULT_NODE_PARAMETERS.get(node["type"], [])
-            missing = [k for k in required if k not in node["parameters"] or not node["parameters"].get(k)]
-            if missing:
-                raise ValueError(
-                    f"Node '{node['name']}' of type '{node['type']}' missing required params: {missing}. "
-                    f"Parameters: {node['parameters']}"
-                )
+            node_type = node["type"]
+            required_params = DEFAULT_NODE_PARAMETERS.get(node_type, {})
+            
+            # Check if critical parameters exist
+            if node_type == "n8n-nodes-base.cron":
+                if "mode" not in node["parameters"]:
+                    raise ValueError(f"Cron node '{node['name']}' missing 'mode' parameter")
+            
+            elif node_type == "n8n-nodes-base.googleGmail":
+                required = ["resource", "operation"]
+                missing = [k for k in required if k not in node["parameters"]]
+                if missing:
+                    raise ValueError(f"Gmail node '{node['name']}' missing required params: {missing}")
+            
+            elif node_type == "n8n-nodes-base.openai":
+                if "messagesUi" not in node["parameters"]:
+                    raise ValueError(f"OpenAI node '{node['name']}' missing 'messagesUi' parameter")
+            
+            elif node_type == "n8n-nodes-base.emailSend":
+                required = ["fromEmail", "toEmail", "subject"]
+                missing = [k for k in required if k not in node["parameters"]]
+                if missing:
+                    raise ValueError(f"Email node '{node['name']}' missing required params: {missing}")
 
-    
+    def get_workflow(self, workflow_id: str) -> dict:
+        """
+        Get existing workflow by ID
+        """
+        response = self.session.get(f"{self.n8n_url}/rest/workflows/{workflow_id}")
+        response.raise_for_status()
+        return response.json().get("data", response.json())
+
+    def update_workflow(self, workflow_id: str, workflow_data: dict) -> dict:
+        """
+        Update existing workflow
+        """
+        response = self.session.put(f"{self.n8n_url}/rest/workflows/{workflow_id}", json=workflow_data)
+        response.raise_for_status()
+        return response.json().get("data", response.json())
+
+    def execute_workflow(self, workflow_id: str) -> dict:
+        """
+        Execute workflow manually
+        """
+        response = self.session.post(f"{self.n8n_url}/rest/workflows/{workflow_id}/execute")
+        response.raise_for_status()
+        return response.json()
