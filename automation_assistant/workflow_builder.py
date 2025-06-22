@@ -1,7 +1,66 @@
-"""
-WorkflowBuilder: creates workflows in n8n using REST API.
-"""
 import uuid
+
+N8N_NODE_TYPES = {
+    "schedule": "n8n-nodes-base.cron",
+    "gmail": "n8n-nodes-base.googleGmail",
+    "openai": "n8n-nodes-base.openai",
+    "sendEmail": "n8n-nodes-base.emailSend",
+    "if": "n8n-nodes-base.if",
+}
+
+
+FAKE_CREDENTIALS = {
+    "n8n-nodes-base.googleGmail": {"googleApi": {"id": "1", "name": "Fake Google Account"}},
+    "n8n-nodes-base.openai": {"openAiApi": {"id": "1", "name": "Fake OpenAI Account"}},
+    "n8n-nodes-base.emailSend": {"smtp": {"id": "1", "name": "Fake SMTP Account"}},
+    "n8n-nodes-base.httpRequest": {"httpBasicAuth": {"id": "1", "name": "Fake HTTP Basic"}}
+}
+
+
+DEFAULT_NODE_PARAMETERS = {
+    "n8n-nodes-base.cron": {
+        "cronExpression": "0 10 * * MON"
+    },
+    "n8n-nodes-base.googleGmail": {
+        "resource": "message",       
+        "operation": "getAll",
+        "returnAll": True,
+        "filters": {"labelIds": ["UNREAD"]}
+    },
+    "n8n-nodes-base.openai": {
+        "resource": "chat",          
+        "operation": "chat",         
+        "model": "gpt-4o",
+        "messagesUi": {
+            "messageValues": [
+                {"role": "system", "content": "Summarize the emails in Markdown."},
+                {"role": "user", "content": "={{$json[\"messages\"]}}"}
+            ]
+        }
+    },
+    "n8n-nodes-base.emailSend": {
+        "fromEmail": "bot@example.com",
+        "toEmail": "me@example.com",
+        "subject": "Weekly Unread Email Summary",
+        "text": "={{$json[\"summary\"]}}"
+    }
+}
+
+
+def fill_missing_parameters_and_creds(node):
+    ntype = node["type"]
+    # Fill default params
+    params = node.get("parameters", {})
+    defaults = DEFAULT_NODE_PARAMETERS.get(ntype, {})
+    for k, v in defaults.items():
+        if k not in params:
+            params[k] = v
+    node["parameters"] = params
+    # Fill credentials in правильном формате
+    creds = FAKE_CREDENTIALS.get(ntype)
+    if creds:
+        node["credentials"] = creds
+    return node
 
 class WorkflowBuilder:
     def __init__(self, n8n_url: str, session):
@@ -9,15 +68,12 @@ class WorkflowBuilder:
         self.session = session
 
     def create_workflow(self, plan: dict) -> dict:
-        """
-        Create a new workflow in n8n based on the plan (nodes + connections).
-        Returns the created workflow object.
-        Raises Exception on HTTP errors.
-        """
+        nodes = self._build_nodes(plan)
+        self._validate_nodes(nodes)  # <- добавлено
         workflow = {
             "name": f"Workflow {str(uuid.uuid4())[:8]}",
-            "nodes": self._build_nodes(plan),
-            "connections": self._build_connections(plan),
+            "nodes": nodes,
+            "connections": self._build_connections(plan, nodes),
             "active": False
         }
         response = self.session.post(f"{self.n8n_url}/rest/workflows", json=workflow)
@@ -26,84 +82,62 @@ class WorkflowBuilder:
         return response.json().get("data", response.json())
 
     def _build_nodes(self, plan: dict) -> list:
-        """
-        Converts the plan['nodes'] into the n8n node format.
-        Maps node 'type' to actual n8n types when possible.
-        """
-        if "nodes" in plan:
-            return [self._node_to_n8n(node) for node in plan["nodes"]]
-
-        # Fallback for old format
         nodes = []
-        if "schedule" in plan:
-            nodes.append({
-                "parameters": {"cronExpression": plan["schedule"]},
-                "name": "Schedule Trigger",
-                "type": "n8n-nodes-base.cron",
-                "typeVersion": 1,
-                "position": [300, 300],
-                "id": "schedule1"
-            })
-        for idx, action in enumerate(plan.get("actions", []), start=1):
-            nodes.append({
-                "parameters": {},
-                "name": f"Action {action}",
-                "type": f"custom.{action}",
-                "typeVersion": 1,
-                "position": [300 + idx*150, 300],
-                "id": f"action{idx}"
-            })
-        return nodes
+        x0, y0 = 300, 300
+        dx, dy = 200, 170
+        if "nodes" in plan:
+            for idx, node in enumerate(plan["nodes"]):
+                n8n_type = N8N_NODE_TYPES.get(node["type"], node["type"])
+                name = node.get("name", node["id"])
+                n = {
+                    "id": node["id"],
+                    "name": name,
+                    "type": n8n_type,
+                    "typeVersion": 1,
+                    "parameters": node.get("parameters", {}),
+                    "position": [x0 + (idx * dx), y0 + ((idx % 2) * dy)]
+                }
+                n = fill_missing_parameters_and_creds(n)
+                nodes.append(n)
+            return nodes
+        # fallback (legacy)
+        return []
 
-    def _build_connections(self, plan: dict) -> dict:
+    def _build_connections(self, plan: dict, nodes: list) -> dict:
         """
-        Build the connections object for n8n.
-        If 'connections' is in plan, use it as-is (converted to n8n format).
-        Otherwise, fallback to linear connection.
+        Converts plan['connections'] {from_id: [to_id, ...]} to n8n format.
         """
-        if "connections" in plan and "nodes" in plan:
-            return self._convert_connections(plan["connections"], plan["nodes"])
-        # fallback: linear
-        nodes = self._build_nodes(plan)
-        if len(nodes) < 2:
+        if "connections" not in plan or "nodes" not in plan:
             return {}
-        conn = {}
-        for i in range(len(nodes)-1):
-            conn.setdefault(nodes[i]["name"], {"main": [[{"node": nodes[i+1]["name"], "type": "main", "index": 0}]]})
-        return conn
+        node_id_to_name = {n["id"]: n["name"] for n in nodes}
+        n8n_conns = {}
+        for from_id, to_ids in plan["connections"].items():
+            if from_id not in node_id_to_name:
+                continue  # некорректная связь
+            from_name = node_id_to_name[from_id]
+            n8n_conns[from_name] = {"main": [
+                [
+                    {
+                        "node": node_id_to_name[to_id],
+                        "type": "main",
+                        "index": 0
+                    } for to_id in to_ids if to_id in node_id_to_name
+                ]
+            ]}
+        return n8n_conns
 
-    def _node_to_n8n(self, node: dict) -> dict:
+    def _validate_nodes(self, nodes: list):
         """
-        Convert LLM node to n8n node format.
-        Maps 'type' to n8n node types when possible. Keeps parameters if present.
+        Checks for all required parameters in nodes.
+        Throws ValueError if any required param is missing.
         """
-        # Map LLM type to n8n node type if possible
-        NODE_TYPE_MAP = {
-            "schedule": "n8n-nodes-base.cron",
-            "gmail": "n8n-nodes-base.googleGmail",
-            "summarize": "n8n-nodes-base.openai",
-            "sendEmail": "n8n-nodes-base.emailSend",
-            "if": "n8n-nodes-base.if",
-            # add more mappings as needed
-        }
-        out = node.copy()
-        # Convert id → name (n8n expects unique "name")
-        if "id" in out and "name" not in out:
-            out["name"] = out["id"]
-        out["type"] = NODE_TYPE_MAP.get(node.get("type", ""), node.get("type"))
-        if "position" not in out:
-            out["position"] = [300, 300]
-        if "typeVersion" not in out:
-            out["typeVersion"] = 1
-        return out
+        for node in nodes:
+            required = DEFAULT_NODE_PARAMETERS.get(node["type"], [])
+            missing = [k for k in required if k not in node["parameters"] or not node["parameters"].get(k)]
+            if missing:
+                raise ValueError(
+                    f"Node '{node['name']}' of type '{node['type']}' missing required params: {missing}. "
+                    f"Parameters: {node['parameters']}"
+                )
 
-    def _convert_connections(self, conn: dict, nodes: list) -> dict:
-        """
-        Convert a simple graph {"a": ["b", "c"]} to n8n's format.
-        """
-        n8n_conn = {}
-        node_map = {n.get("id", n.get("name")): n.get("name", n.get("id")) for n in nodes}
-        for from_id, to_ids in conn.items():
-            from_name = node_map.get(from_id, from_id)
-            n8n_conn[from_name] = {"main": [[{"node": node_map.get(to_id, to_id), "type": "main", "index": 0} for to_id in to_ids]]}
-        return n8n_conn
+    

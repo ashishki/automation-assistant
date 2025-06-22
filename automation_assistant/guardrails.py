@@ -2,6 +2,7 @@
 SafetyValidator: provides guardrails for validating prompts and workflow plans.
 """
 from jsonschema import validate, ValidationError
+from .workflow_builder import DEFAULT_NODE_PARAMETERS
 
 PLAN_SCHEMA = {
     "type": "object",
@@ -53,13 +54,11 @@ class SafetyValidator:
         return True
 
     def validate_plan(self, plan: dict) -> bool:
-        try:
-            # Simple: branch on structure
-            if "nodes" in plan and "connections" in plan:
-                validate(plan, PLAN_SCHEMA)
-            else:
-                validate(plan, PLAN_SCHEMA)
-            return True
-        except ValidationError as e:
-            print("Plan validation error:", e)
+        if "nodes" not in plan or "connections" not in plan:
+            print("Validation error: missing 'nodes' or 'connections'")
             return False
+        for node in plan["nodes"]:
+            if "id" not in node or "type" not in node or "parameters" not in node:
+                print(f"Validation error: node missing id/type/parameters: {node}")
+                return False
+        return True
