@@ -25,12 +25,14 @@ def test_validate_plan_schema_ok():
                 "id": "cron1",
                 "type": "n8n-nodes-base.cron",
                 "parameters": {
-                    "mode": "everyWeek",
-                    "dayOfWeek": [1],
-                    "hour": 10,
-                    "minute": 0,
-                    "timezone": "UTC"
-                }
+                "triggerTimes": [
+                    {
+                        "mode": "custom",
+                        "cronExpression": "0 10 * * 1",
+                        "timezone": "UTC"
+                    }
+                ]
+            }
             },
             {
                 "id": "gmail1",
@@ -53,10 +55,21 @@ def test_validate_plan_schema_ok():
             }
         ],
         "connections": {
-            "cron1": ["gmail1"]
+            "cron1": {
+                "main": [
+                    [
+                        {
+                            "node": "gmail1",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            }
         }
     }
     assert validator.validate_plan(plan) is True
+
 
 
 def test_validate_plan_schema_bad_missing_nodes():
