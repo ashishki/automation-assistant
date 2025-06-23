@@ -1,7 +1,7 @@
 import requests
 import time
 from jsonschema import validate, ValidationError
-from .workflow_builder import DEFAULT_NODE_PARAMETERS
+from .prompts import COMPLETE_PARAMS
 
 PLAN_SCHEMA = {
     "type": "object",
@@ -76,7 +76,7 @@ class SafetyValidator:
             return False
         # Required parameters
         for node in plan.get("nodes", []):
-            params_required = DEFAULT_NODE_PARAMETERS.get(node["type"], {})
+            params_required = COMPLETE_PARAMS.get(node["type"], {})
             for key in params_required:
                 if key not in node.get("parameters", {}):
                     print(f"Validation error: node '{node['id']}' missing parameter '{key}'")

@@ -1,117 +1,7 @@
 import uuid
 import json
+from .prompts import N8N_NODE_TYPES, COMPLETE_PARAMS, FAKE_CREDENTIALS
 
-N8N_NODE_TYPES = {
-    "schedule": "n8n-nodes-base.cron",
-    "gmail": "n8n-nodes-base.googleGmail",
-    "openai": "n8n-nodes-base.openai",
-    "sendEmail": "n8n-nodes-base.emailSend",
-    "if": "n8n-nodes-base.if",
-    "aggregate": "n8n-nodes-base.aggregate",
-}
-
-FAKE_CREDENTIALS = {
-    "n8n-nodes-base.googleGmail": {"googleApi": {"id": "1", "name": "Fake Google Account"}},
-    "n8n-nodes-base.openai": {"openAiApi": {"id": "1", "name": "Fake OpenAI Account"}},
-    "n8n-nodes-base.emailSend": {"smtp": {"id": "1", "name": "Fake SMTP Account"}},
-    "n8n-nodes-base.httpRequest": {"httpBasicAuth": {"id": "1", "name": "Fake HTTP Basic"}},
-    "n8n-nodes-base.aggregate": {},
-}
-
-# Updated parameters for modern n8n version
-DEFAULT_NODE_PARAMETERS = {
-    "n8n-nodes-base.cron": {
-        "mode": "everyWeek",
-        "dayOfWeek": [1],  # Monday
-        "hour": 10,
-        "minute": 0,
-        "timezone": "UTC"
-    },
-    "n8n-nodes-base.googleGmail": {
-        "resource": "message",
-        "operation": "getAll",
-        "returnAll": True,
-        "limit": 50,
-        "simple": False,
-        "filters": {
-            "labelIds": ["UNREAD"],
-            "includeSpamTrash": False
-        },
-        "options": {
-            "attachments": False,
-            "format": "full"
-        }
-    },
-    "n8n-nodes-base.code": {
-        "functionCode": (
-            "// Filters emails with forbidden words\n"
-            "const forbidden = ['spam','scam','viagra','offensive'];\n"
-            "let clean = [];\n"
-            "let flagged = [];\n"
-            "for (const item of items) {\n"
-            "  const subject = (item.json.subject || '').toLowerCase();\n"
-            "  const snippet = (item.json.snippet || '').toLowerCase();\n"
-            "  let bad = false;\n"
-            "  for (const word of forbidden) {\n"
-            "    if (subject.includes(word) || snippet.includes(word)) {\n"
-            "      bad = true;\n"
-            "      break;\n"
-            "    }\n"
-            "  }\n"
-            "  if (bad) { flagged.push(item); } else { clean.push(item); }\n"
-            "}\n"
-            "return [{ json: { filtered: clean.length, flagged: flagged.length } }, ...clean];"
-        )
-    },
-    "n8n-nodes-base.aggregate": {
-        "aggregation": {
-            "mode": "append",
-            "fields": [
-                {
-                    "fieldName": "*",               
-                    "aggregatedAs": "emails",       
-                    "aggregationFunction": "append"
-                }
-            ]
-        },
-        "options": {}
-    },
-    "n8n-nodes-base.openai": {
-        "resource": "chat",
-        "operation": "chat",
-        "model": "gpt-4o-mini",
-        "options": {
-            "temperature": 0.3,
-            "maxTokens": 1000
-        },
-        "messagesUi": {
-            "messageValues": [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that summarizes emails. Create a concise summary in markdown format."
-                },
-                {
-                    "role": "user",
-                    "content": "Please summarize these emails:\n\n={{$json.emails.map(email => `Subject: ${email.subject}\\nFrom: ${email.from}\\nSnippet: ${email.snippet}`).join('\\n\\n')}}"
-                }
-            ]
-        },
-        "simplifyOutput": False
-    },
-    "n8n-nodes-base.emailSend": {
-        "fromEmail": "noreply@yourdomain.com",
-        "toEmail": "user@example.com",
-        "subject": "📧 Weekly Email Summary - {{$now.format('YYYY-MM-DD')}}",
-        "message": "={{$json.message.content || $json}}",
-        "options": {
-            "allowUnauthorizedCerts": False,
-            "replyTo": "",
-            "cc": "",
-            "bcc": ""
-        },
-        "transport": "smtp"
-    }
-}
 
 def fill_missing_parameters_and_creds(node):
     """
@@ -121,7 +11,7 @@ def fill_missing_parameters_and_creds(node):
     
     # Fill default params
     params = node.get("parameters", {})
-    defaults = DEFAULT_NODE_PARAMETERS.get(ntype, {})
+    defaults = COMPLETE_PARAMS.get(ntype, {})
     
     # Deep merge parameters
     for k, v in defaults.items():
@@ -293,7 +183,7 @@ class WorkflowBuilder:
         """
         for node in nodes:
             node_type = node["type"]
-            required_params = DEFAULT_NODE_PARAMETERS.get(node_type, {})
+            required_params = COMPLETE_PARAMS.get(node_type, {})
             
             # Check if critical parameters exist
             if node_type == "n8n-nodes-base.cron":
