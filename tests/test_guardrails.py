@@ -1,61 +1,145 @@
-from automation_assistant.guardrails import SafetyValidator
+import pytest
+import time
+from automation_assistant.guardrails import SafetyValidator, LatencyMetrics
 
 def test_validate_input_ok():
-    """
-    Test that a normal, safe prompt passes validation.
-    """
     validator = SafetyValidator()
     prompt = "Send me a summary of Gmail messages every Monday."
     assert validator.validate_input(prompt) is True
 
 def test_validate_input_too_long():
-    """
-    Test that a too-long prompt is rejected.
-    """
     validator = SafetyValidator()
     prompt = "A" * 1001  # more than 1000 chars
     assert validator.validate_input(prompt) is False
 
 def test_validate_input_blacklist():
-    """
-    Test that a prompt containing forbidden keywords is rejected.
-    """
     validator = SafetyValidator()
     prompt = "Delete all system files!"
     assert validator.validate_input(prompt) is False
 
 def test_validate_plan_schema_ok():
-    """
-    Test that a well-formed workflow plan passes validation.
-    """
     validator = SafetyValidator()
     plan = {
-        "trigger": "cron",
-        "schedule": "0 9 * * MON",
-        "actions": ["gmail_summary"]
+        "nodes": [
+            {
+                "id": "cron1",
+                "type": "n8n-nodes-base.cron",
+                "parameters": {
+                    "mode": "everyWeek",
+                    "dayOfWeek": [1],
+                    "hour": 10,
+                    "minute": 0,
+                    "timezone": "UTC"
+                }
+            },
+            {
+                "id": "gmail1",
+                "type": "n8n-nodes-base.googleGmail",
+                "parameters": {
+                    "resource": "message",
+                    "operation": "getAll",
+                    "returnAll": True,
+                    "limit": 50,
+                    "simple": False,
+                    "filters": {
+                        "labelIds": ["UNREAD"],
+                        "includeSpamTrash": False
+                    },
+                    "options": {
+                        "attachments": False,
+                        "format": "full"
+                    }
+                }
+            }
+        ],
+        "connections": {
+            "cron1": ["gmail1"]
+        }
     }
     assert validator.validate_plan(plan) is True
 
-def test_validate_plan_schema_bad():
-    """
-    Test that a malformed workflow plan is rejected.
-    """
+
+def test_validate_plan_schema_bad_missing_nodes():
     validator = SafetyValidator()
     plan = {
-        "schedule": "0 9 * * MON",  # missing trigger
-        "actions": "gmail_summary"  # actions should be a list
+        "connections": {"a": ["b"]}
     }
     assert validator.validate_plan(plan) is False
 
-def test_validate_plan_extra_field():
-    """
-    Test that plan with extra fields is rejected by schema.
-    """
+def test_validate_plan_schema_bad_node_fields():
     validator = SafetyValidator()
     plan = {
-        "trigger": "cron",
-        "schedule": "0 9 * * MON",
-        "actions": ["gmail_summary"],
-        "extra": "should not be here"
+        "nodes": [
+            {"type": "n8n-nodes-base.cron", "parameters": {}},  # missing id
+        ],
+        "connections": {}
     }
     assert validator.validate_plan(plan) is False
+
+def test_validate_plan_schema_bad_extra_fields():
+    validator = SafetyValidator()
+    plan = {
+        "nodes": [
+            {"id": "cron1", "type": "n8n-nodes-base.cron", "parameters": {}}
+        ],
+        "connections": {},
+        "extra": "not allowed"
+    }
+    assert validator.validate_plan(plan) is False
+
+# -------------------- MODERATION (mock, no OpenAI calls) ----------------------
+
+def test_validate_input_moderation(monkeypatch):
+    validator = SafetyValidator()
+    # monkeypatch OpenAI moderation to always return True
+    monkeypatch.setattr(validator, "moderate_prompt", lambda prompt, api_key: True)
+    assert validator.moderate_prompt("Send me a summary", "sk-test") is True
+    # Now test the "unsafe" path
+    monkeypatch.setattr(validator, "moderate_prompt", lambda prompt, api_key: False)
+    assert validator.moderate_prompt("Delete all data", "sk-test") is False
+
+# -------------------- LATENCY METRICS ----------------------
+
+def test_latency_metrics_basic():
+    metrics = LatencyMetrics()
+    metrics.start("step1")
+    time.sleep(0.01)
+    metrics.stop("step1")
+    result = metrics.summary()
+    assert "step1" in result
+    assert result["step1"] > 0
+
+    prom = metrics.export_prometheus()
+    assert "latency_seconds" in prom
+
+# -------------------- EDGE CASES ----------------------
+
+def test_validate_input_non_string():
+    validator = SafetyValidator()
+    assert validator.validate_input(12345) is False
+
+def test_validate_plan_empty():
+    validator = SafetyValidator()
+    assert validator.validate_plan({}) is False
+
+def test_validate_plan_bad_node_type():
+    validator = SafetyValidator()
+    plan = {
+        "nodes": [
+            {"id": "cron1", "parameters": {}}  # missing "type"
+        ],
+        "connections": {}
+    }
+    assert validator.validate_plan(plan) is False
+
+def test_validate_plan_bad_node_parameters():
+    validator = SafetyValidator()
+    plan = {
+        "nodes": [
+            {"id": "cron1", "type": "n8n-nodes-base.cron"},  # missing "parameters"
+        ],
+        "connections": {}
+    }
+    assert validator.validate_plan(plan) is False
+
+

@@ -26,14 +26,18 @@ def test_create_workflow_success(monkeypatch):
     # Patch requests.Session with our dummy session
     builder = WorkflowBuilder(n8n_url="http://fake:5678", session=DummySession())
     plan = {
-        "trigger": "cron",
-        "schedule": "0 9 * * MON",
-        "actions": ["gmail_summary"]
+        "nodes": [
+            {"id": "cron1", "type": "n8n-nodes-base.cron", "parameters": {"mode": "everyWeek"}},
+            {"id": "gmail1", "type": "n8n-nodes-base.googleGmail", "parameters": {"resource": "message", "operation": "getAll"}}
+        ],
+        "connections": {
+            "cron1": ["gmail1"]
+        }
     }
     result = builder.create_workflow(plan)
     assert isinstance(result, dict)
     assert "id" in result
-    assert result["name"].startswith("Workflow")
+    assert result["name"].startswith("AI Generated Workflow")
 
 def test_create_workflow_api_error(monkeypatch):
     """

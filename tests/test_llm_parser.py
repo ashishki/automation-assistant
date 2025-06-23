@@ -30,11 +30,10 @@ def test_llmparser_parses_json(monkeypatch):
     assert isinstance(plan["nodes"], list)
 
 def test_llmparser_handles_invalid_json(monkeypatch):
-    """Test LLMParser fallback for non-JSON output."""
     parser = LLMParser()
     parser.client = DummyClient("I don't know what to do!")
     plan = parser.parse("unknown task")
-    assert "raw_response" in plan
+    assert plan.get("fallback") is True
 
 
 def test_llmparser_branching(monkeypatch):
