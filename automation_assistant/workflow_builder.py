@@ -7,6 +7,7 @@ N8N_NODE_TYPES = {
     "openai": "n8n-nodes-base.openai",
     "sendEmail": "n8n-nodes-base.emailSend",
     "if": "n8n-nodes-base.if",
+    "aggregate": "n8n-nodes-base.aggregate",
 }
 
 FAKE_CREDENTIALS = {
@@ -14,7 +15,7 @@ FAKE_CREDENTIALS = {
     "n8n-nodes-base.openai": {"openAiApi": {"id": "1", "name": "Fake OpenAI Account"}},
     "n8n-nodes-base.emailSend": {"smtp": {"id": "1", "name": "Fake SMTP Account"}},
     "n8n-nodes-base.httpRequest": {"httpBasicAuth": {"id": "1", "name": "Fake HTTP Basic"}},
-    "n8n-nodes-base.itemLists": {},
+    "n8n-nodes-base.aggregate": {},
 }
 
 # Updated parameters for modern n8n version
@@ -27,7 +28,7 @@ DEFAULT_NODE_PARAMETERS = {
         "timezone": "UTC"
     },
     "n8n-nodes-base.googleGmail": {
-        "resource": "message",       
+        "resource": "message",
         "operation": "getAll",
         "returnAll": True,
         "limit": 50,
@@ -41,9 +42,43 @@ DEFAULT_NODE_PARAMETERS = {
             "format": "full"
         }
     },
+    "n8n-nodes-base.code": {
+        "functionCode": (
+            "// Filters emails with forbidden words\n"
+            "const forbidden = ['spam','scam','viagra','offensive'];\n"
+            "let clean = [];\n"
+            "let flagged = [];\n"
+            "for (const item of items) {\n"
+            "  const subject = (item.json.subject || '').toLowerCase();\n"
+            "  const snippet = (item.json.snippet || '').toLowerCase();\n"
+            "  let bad = false;\n"
+            "  for (const word of forbidden) {\n"
+            "    if (subject.includes(word) || snippet.includes(word)) {\n"
+            "      bad = true;\n"
+            "      break;\n"
+            "    }\n"
+            "  }\n"
+            "  if (bad) { flagged.push(item); } else { clean.push(item); }\n"
+            "}\n"
+            "return [{ json: { filtered: clean.length, flagged: flagged.length } }, ...clean];"
+        )
+    },
+    "n8n-nodes-base.aggregate": {
+        "aggregation": {
+            "mode": "append",
+            "fields": [
+                {
+                    "fieldName": "*",               
+                    "aggregatedAs": "emails",       
+                    "aggregationFunction": "append"
+                }
+            ]
+        },
+        "options": {}
+    },
     "n8n-nodes-base.openai": {
-        "resource": "chat",          
-        "operation": "chat",         
+        "resource": "chat",
+        "operation": "chat",
         "model": "gpt-4o-mini",
         "options": {
             "temperature": 0.3,
@@ -52,12 +87,12 @@ DEFAULT_NODE_PARAMETERS = {
         "messagesUi": {
             "messageValues": [
                 {
-                    "role": "system", 
+                    "role": "system",
                     "content": "You are a helpful assistant that summarizes emails. Create a concise summary in markdown format."
                 },
                 {
-                    "role": "user", 
-                    "content": "Please summarize these emails:\n\n={{$json.map(email => `Subject: ${email.subject}\\nFrom: ${email.from}\\nSnippet: ${email.snippet}`).join('\\n\\n')}}"
+                    "role": "user",
+                    "content": "Please summarize these emails:\n\n={{$json.emails.map(email => `Subject: ${email.subject}\\nFrom: ${email.from}\\nSnippet: ${email.snippet}`).join('\\n\\n')}}"
                 }
             ]
         },

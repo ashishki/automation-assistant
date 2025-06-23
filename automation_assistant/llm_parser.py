@@ -27,15 +27,18 @@ COMPLETE_PARAMS = {
             "format": "full"
         }
     },
-    "n8n-nodes-base.itemLists": {
-        "operation": "aggregateItems",
-        "fieldsToAggregate": [
+    "n8n-nodes-base.aggregate": {
+    "aggregation": {
+        "mode": "append",
+        "fields": [
             {
-                "fieldToAggregate": "",
-                "destinationField": "emails"
+                "fieldName": "*",            
+                "aggregatedAs": "emails",    
+                "aggregationFunction": "append"
             }
-        ],
-        "outputType": "oneItem"
+        ]
+    },
+    "options": {}
     },
     "n8n-nodes-base.openai": {
         "resource": "chat",
@@ -122,22 +125,28 @@ class LLMParser:
         self.system_prompt = """You are an expert n8n workflow architect. Generate complete, production-ready n8n workflow JSON.
 
 CRITICAL REQUIREMENTS:
-1. Always include ALL required parameters for each node type
-2. Always insert an Item Lists node to aggregate all emails into a single array field named 'emails' between Gmail and OpenAI nodes.
-3. Use proper n8n expression syntax: ={{$json.field}} or ={{$node("NodeName").json.field}}
-4. Include realistic credential references
-5. Create sequential connections between nodes automatically
-6. Use modern n8n parameter structure (v1.0+)
-7. Generate only valid JSON - no explanations or comments
+1. Always include ALL required parameters for each node type.
+2. Always insert a Code node named 'Validate Emails' after the Gmail node. 
+   This node must filter out or flag emails containing forbidden or unsafe content (using a hardcoded list of forbidden words: ['spam', 'scam', 'viagra', 'offensive']). 
+   Output the count of filtered and flagged items for observability.
+3. Always insert an Aggregate node (not deprecated Item Lists) named 'Aggregate Emails' after 'Validate Emails' and before the OpenAI node.
+   The Aggregate node must aggregate all filtered emails into a single array field named 'emails'.
+4. Use proper n8n expression syntax: ={{$json.field}} or ={{$node("NodeName").json.field}}.
+5. Include realistic credential references.
+6. Create sequential connections between nodes automatically.
+7. Use modern n8n parameter structure (v1.0+).
+8. Generate only valid JSON - no explanations or comments.
+
 
 SUPPORTED NODE TYPES:
 - n8n-nodes-base.cron (Schedule Trigger)
 - n8n-nodes-base.googleGmail (Gmail)
-- n8n-nodes-base.itemLists (Item Lists, for aggregating into emails)
+- n8n-nodes-base.aggregate (Item Lists, for aggregating into emails)
 - n8n-nodes-base.openai (OpenAI/ChatGPT)
 - n8n-nodes-base.emailSend (Send Email)
 - n8n-nodes-base.if (Conditional Logic)
 - n8n-nodes-base.httpRequest (HTTP Request)
+- n8n-nodes-base.code (Code, for data validation/guardrails)
 
 WORKFLOW STRUCTURE TEMPLATE:
 {
@@ -163,23 +172,38 @@ WORKFLOW STRUCTURE TEMPLATE:
       "disabled": false
     },
     {
-      "id": "aggregate1",
-      "name": "Aggregate Emails",
-      "type": "n8n-nodes-base.itemLists",
+      "id": "guardrail1",
+      "name": "Validate Emails",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "parameters": {
-        "operation": "aggregateItems",
-        "fieldsToAggregate": [
-          {
-            "fieldToAggregate": "",
-            "destinationField": "emails"
-          }
-        ],
-        "outputType": "oneItem"
+      "functionCode": "// Filters emails with forbidden words\nconst forbidden = ['spam','scam','viagra','offensive'];\nlet clean = [];\nlet flagged = [];\nfor (const item of items) {\n  const subject = (item.json.subject || '').toLowerCase();\n  const snippet = (item.json.snippet || '').toLowerCase();\n  let bad = false;\n  for (const word of forbidden) {\n    if (subject.includes(word) || snippet.includes(word)) {\n      bad = true;\n      break;\n    }\n  }\n  if (bad) {\n    flagged.push(item);\n  } else {\n    clean.push(item);\n  }\n}\nreturn [{ json: { filtered: clean.length, flagged: flagged.length } }, ...clean];"
       },
-      "position": [570, 300],
+      "position": [600, 300],
       "disabled": false
     },
+    {
+    "id": "aggregate1",
+    "name": "Aggregate Emails",
+    "type": "n8n-nodes-base.aggregate",
+    "typeVersion": 1,
+    "parameters": {
+        "aggregation": {
+        "mode": "append",
+        "fields": [
+            {
+            "fieldName": "*",
+            "aggregatedAs": "emails",
+            "aggregationFunction": "append"
+            }
+        ]
+        },
+        "options": {}
+    },
+    "position": [570, 300],
+    "disabled": false
+    },
+
     {
       "id": "openai1",
       "name": "Summarize Emails",
@@ -222,6 +246,7 @@ WORKFLOW STRUCTURE TEMPLATE:
   "connections": {
     "Schedule Trigger": { "main": [[{"node": "Get Unread Emails", "type": "main", "index": 0}]] },
     "Get Unread Emails": { "main": [[{"node": "Aggregate Emails", "type": "main", "index": 0}]] },
+    "Validate Emails": { "main": [[{"node": "Aggregate Emails", "type": "main", "index": 0}]] },
     "Aggregate Emails": { "main": [[{"node": "Summarize Emails", "type": "main", "index": 0}]] },
     "Summarize Emails": { "main": [[{"node": "Send Summary", "type": "main", "index": 0}]] }
   }
@@ -290,8 +315,28 @@ IMPORTANT NOTES:
             node.setdefault("position", [240 + idx*220, 300])
             node.setdefault("disabled", False)
             
-            # Merge complete parameters
             node_type = node.get("type", "")
+
+            # --- AUTO-FIX FOR AGGREGATE NODE ---
+            if node_type == "n8n-nodes-base.aggregate":
+                # If wrong/legacy params present, replace with valid structure
+                params = node.get("parameters", {})
+                if ("operation" in params or "fieldsToAggregate" in params or "outputType" in params
+                    or "aggregation" not in params):
+                    node["parameters"] = {
+                        "aggregation": {
+                            "mode": "append",
+                            "fields": [
+                                {
+                                    "fieldName": "*",
+                                    "aggregatedAs": "emails",
+                                    "aggregationFunction": "append"
+                                }
+                            ]
+                        },
+                        "options": {}
+                    }
+            # Merge complete parameters for all nodes
             if node_type in COMPLETE_PARAMS:
                 complete_params = self._deep_merge(
                     COMPLETE_PARAMS[node_type].copy(),
@@ -313,6 +358,7 @@ IMPORTANT NOTES:
             plan["connections"] = self._create_auto_connections(enhanced_nodes)
         
         return plan
+
 
     def _deep_merge(self, base: Dict, override: Dict) -> Dict:
         """

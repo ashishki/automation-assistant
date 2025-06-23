@@ -22,14 +22,32 @@ PLAN_SCHEMA = {
         "connections": {
             "type": "object",
             "additionalProperties": {
-                "type": "array",
-                "items": {"type": "string"}
+                "type": "object",
+                "properties": {
+                    "main": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "node": {"type": "string"},
+                                    "type": {"type": "string"},
+                                    "index": {"type": "number"}
+                                },
+                                "required": ["node", "type", "index"]
+                            }
+                        }
+                    }
+                },
+                "required": ["main"]
             }
         }
     },
     "required": ["nodes", "connections"],
     "additionalProperties": False
 }
+
 
 class SafetyValidator:
     def __init__(self):
