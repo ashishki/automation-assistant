@@ -25,13 +25,11 @@ def test_validate_plan_schema_ok():
                 "id": "cron1",
                 "type": "n8n-nodes-base.cron",
                 "parameters": {
-                "triggerTimes": [
-                    {
                         "mode": "custom",
                         "cronExpression": "0 10 * * 1",
                         "timezone": "UTC"
-                    }
-                ]
+                    
+                
             }
             },
             {
