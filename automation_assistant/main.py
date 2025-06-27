@@ -5,6 +5,7 @@ import requests
 from automation_assistant.llm_parser import LLMParser
 from automation_assistant.guardrails import SafetyValidator, LatencyMetrics
 from automation_assistant.workflow_builder import WorkflowBuilder
+from automation_assistant.metrics_server import MetricsServer
 
 def login_and_fetch_session(n8n_url: str, email: str, password: str) -> requests.Session:
     """
@@ -50,7 +51,7 @@ def main():
     # Metrics object for latency
     metrics = LatencyMetrics()
     validator = SafetyValidator()
-
+    
     # 1. Login
     metrics.start("login")
     for i in range(1, 7):
@@ -124,5 +125,10 @@ def main():
     with open("metrics.prom", "w") as f:
         f.write(metrics.export_prometheus())
 
+    return metrics
+
+
 if __name__ == "__main__":
-    main()
+    metrics = main()
+    metrics_server = MetricsServer(metrics)
+    metrics_server.run(host="0.0.0.0", port=8001)

@@ -39,6 +39,7 @@ class WorkflowBuilder:
 
     def create_workflow(self, plan: dict) -> dict:
         nodes = self._build_nodes(plan)
+        self._validate_nodes(nodes)
         connections = self._build_connections(plan, nodes)
 
         
@@ -131,7 +132,7 @@ class WorkflowBuilder:
                 if connections_list:
                     n8n_conns[from_name] = {"main": [connections_list]}
 
-            # Если связей не получилось (пустой граф) — автосвязь
+            
             if not n8n_conns and len(nodes) > 1:
                 for i in range(len(node_names) - 1):
                     n8n_conns[node_names[i]] = {
@@ -139,7 +140,7 @@ class WorkflowBuilder:
                     }
             return n8n_conns
 
-        # Step 2: если нет connections — автосвязь
+        # Step 2: 
         if len(nodes) < 2:
             return {}
         for i in range(len(node_names) - 1):

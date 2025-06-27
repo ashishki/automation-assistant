@@ -33,8 +33,6 @@ WORKFLOW STRUCTURE TEMPLATE:
     "type": "n8n-nodes-base.cron",
     "typeVersion": 1,
     "parameters": {
-    "triggerTimes": [
-        {
         "mode": "custom",
         "cronExpression": "0 10 * * 1",
         "timezone": "UTC"
@@ -156,13 +154,10 @@ N8N_NODE_TYPES = {
 
 COMPLETE_PARAMS = {
     "n8n-nodes-base.cron": {
-        "triggerTimes": [
-            {
+        
                 "mode": "custom",
                 "cronExpression": "0 10 * * 1",
-                "timezone": "UTC"
-            }
-        ]
+                "timezone": "UTC"       
     },
     "n8n-nodes-base.googleGmail": {
         "resource": "message",

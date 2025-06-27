@@ -1,253 +1,364 @@
-# 🦾 Automation Assistant: AI-Generated n8n Workflows
+# 🤖 n8n Automation Assistant
 
-<div align="center">
-  <img src="https://via.placeholder.com/150x150/FF6B35/FFFFFF?text=🦾" alt="Automation Assistant Logo" width="150"/>
-  
-  <p align="center">
-    <strong>Transform natural language into production-ready n8n automation workflows</strong>
-  </p>
-  
-  <p align="center">
-    <a href="#features">Features</a> •
-    <a href="#quickstart">Quick Start</a> •
-    <a href="#usage">Usage</a> •
-    <a href="#architecture">Architecture</a> •
-    <a href="#contributing">Contributing</a>
-  </p>
-  
-  <p align="center">
-    <img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"/>
-    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"/>
-    <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build Status"/>
-    <img src="https://img.shields.io/badge/python-3.12-blue.svg" alt="Python"/>
-    <img src="https://img.shields.io/badge/docker-ready-blue.svg" alt="Docker"/>
-  </p>
-</div>
+> Transform natural language into production-ready n8n workflows with AI-powered automation
+
+
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Python](https://img.shields.io/badge/Python-3.8+-green.svg)](https://www.python.org/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-orange.svg)](https://openai.com/)
 
 ---
 
-## 🌟 Overview
+##  What is this?
 
-This project is a containerized assistant for **generating, validating, and deploying n8n automation workflows** from simple natural language prompts. It leverages LLMs (OpenAI, etc.), enforces smart guardrails, and ships with a modern DevOps toolchain for enterprise-ready automation.
+The **n8n Automation Assistant** is your AI-powered workflow companion that converts plain English descriptions into fully functional n8n automations. No more manual node configuration – just describe what you want, and watch your workflow come to life!
 
-> **Example**: "Every Monday at 10:00 AM, send me a summary of unread Gmail emails." → Complete n8n workflow deployed and ready to run.
 
-## 🚀 Features
 
-- 🧠 **Natural Language to Workflow**  
-  Transform plain English descriptions into fully functional n8n workflows with proper scheduling and integrations
+##  Key Features
 
-- 🛡️ **Built-in Guardrails**  
-  Email content moderation, forbidden content filtering, and customizable validation rules
+<table>
+<tr>
+<td width="50%">
 
-- ⚙️ **Smart Parameter Generation**  
-  Automatically generates correct, modern n8n parameters (v1+) with intelligent aggregation and validation
+###  **AI-Powered Generation**
+- Natural language → Working n8n workflow
+- Powered by OpenAI's latest models
+- Smart node selection and configuration
 
-- 🔄 **Auto-Deploy to n8n**  
-  Seamlessly communicates with your n8n server to upload and activate workflows
+###  **Built-in Safety**
+- Content moderation and validation
+- Custom guardrails for secure workflows
+- Schema validation for all nodes
 
-- 🔧 **Highly Extensible**  
-  All prompt engineering and node configurations centralized in `promptspy.py` for easy business customization
+</td>
+<td width="50%">
 
-- 🐳 **Full Containerization**  
-  Complete Docker setup with docker-compose and CI/CD via GitHub Actions
+###  **Production Ready**
+- Full Docker containerization
+- Prometheus metrics integration
+- CI/CD pipeline included
 
-- 📊 **Production Ready**  
-  Comprehensive testing, monitoring, and deployment pipeline included
+###  **Developer Friendly**
+- Modular architecture
+- Comprehensive test coverage
+- Easy customization and extension
 
-## 🛠️ Tech Stack
+</td>
+</tr>
+</table>
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Runtime** | Python 3.12 + Poetry | Core application and dependency management |
-| **AI/ML** | OpenAI API (swappable) | Natural language processing and workflow generation |
-| **Automation** | n8n (Docker) | Workflow execution platform |
-| **Testing** | Pytest | Unit and integration testing |
-| **Containerization** | Docker + Docker Compose | Service orchestration |
-| **CI/CD** | GitHub Actions | Automated testing and deployment |
+---
 
-## 🏁 Quick Start
+##  Architecture Overview
+
+```mermaid
+graph TD
+    A[👤 User Prompt] --> B[🧠 LLM Parser]
+    B --> C[🔨 Workflow Builder]
+    B --> D[🛡️ Guardrails]
+    C --> E[📊 n8n API]
+    D --> F[📈 Metrics]
+    E --> G[✅ Ready Workflow]
+    
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style C fill:#e8f5e8
+    style D fill:#fff3e0
+    style E fill:#fce4ec
+    style F fill:#f1f8e9
+    style G fill:#e0f2f1
+```
+
+---
+
+##  Quick Start
 
 ### Prerequisites
-
 - Docker & Docker Compose
-- OpenAI API key (or alternative LLM provider)
-- n8n instance (can be local via Docker)
+- OpenAI API key
+- n8n instance (local or remote)
 
-### 1. Clone & Configure
-
+### 1️⃣ Clone the Repository
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/automation-assistant.git
+git clone https://github.com/yourusername/automation-assistant.git
 cd automation-assistant
+```
 
-# Set up environment variables
+### 2️⃣ Configure Environment
+```bash
 cp .env.example .env
-# Edit .env with your API keys and configuration
+# Edit .env with your settings
 ```
 
-### 2. Start Services
+Required environment variables:
+```env
+N8N_API_URL=http://n8n:5678
+N8N_USER_EMAIL=your@n8n.email
+N8N_USER_PASSWORD=yourpassword
+OPENAI_API_KEY=sk-your-openai-key
+PROMPT=Every Monday at 10:00 AM, send me a summary of unread Gmail emails.
+```
 
+### 3️⃣ Launch with Docker
 ```bash
-# Launch the complete stack
 docker-compose up --build
-
-# Services will be available at:
-# - n8n: http://localhost:5678
-# - Assistant: CLI container ready
 ```
 
-### 3. Generate Your First Workflow
+### 4️⃣ Access Your Tools
+- 🎯 **n8n Interface**: http://localhost:5678
+- 📊 **Metrics Dashboard**: http://localhost:8001/metrics
 
-```bash
-# Generate workflow from natural language
-docker-compose run --rm \
-  -e PROMPT="Every Monday at 10:00 AM, send me a summary of unread Gmail emails." \
-  automation-assistant
-```
-
-**What happens:**
-1. 🧠 Your prompt is processed by the LLM
-2. ✅ Workflow is validated and optimized
-3. 🚀 Ready workflow is deployed to n8n
-4. 📋 Workflow ID and management links are provided
-
-### 4. Run Tests
-
-```bash
-# Local development
-poetry install
-poetry run pytest
-
-# Or via Docker
-docker-compose run --rm automation-assistant pytest
-```
+---
 
 ## 💡 Usage Examples
 
-### Basic Email Automation
+### 📧 Email Automation
+```
+"Every weekday at 9 AM, check for new emails with 'urgent' in the subject and send a Slack notification"
+```
+
+### 📱 Social Media Management
+```
+"Post my latest blog articles to Twitter and LinkedIn whenever I publish them on my website"
+```
+
+### 📈 Data Processing
+```
+"Download sales data from Google Sheets every hour and update our CRM with new leads"
+```
+
+### 🔄 System Integration
+```
+"When a new customer signs up, create a Trello card, send a welcome email, and add them to our newsletter"
+```
+
+---
+
+## 🧩 Project Structure
+
+```
+automation_assistant/
+├── 📁 automation_assistant/
+│   ├── 🐍 main.py              # CLI entrypoint
+│   ├── 📝 prompts.py           # Prompt templates & node configs
+│   ├── 🛡️ guardrails.py        # Safety checks & metrics
+│   ├── 🔨 workflow_builder.py  # n8n workflow construction
+│   ├── 🧠 llm_parser.py        # LLM communication logic
+│   └── 🧪 tests/               # Comprehensive test suite
+├── 🐳 docker-compose.yaml      # Container orchestration
+├── 📦 Dockerfile               # Application container
+├── ⚙️ .env.example             # Environment template
+└── 📚 README.md                # This beautiful file!
+```
+
+---
+
+## 🛡️ Security & Validation
+
+### Multi-Layer Protection
+- **🔍 OpenAI Moderation**: Automatic content safety screening
+- **✅ Custom Validators**: Configurable business rule enforcement
+- **🔒 Schema Validation**: Ensures workflow integrity
+- **📊 Audit Logging**: Complete operation traceability
+
+### Customizable Guardrails
+```python
+# Example: Add custom validation rules
+def custom_validator(prompt: str) -> bool:
+    forbidden_words = ['delete_all', 'drop_table']
+    return not any(word in prompt.lower() for word in forbidden_words)
+```
+
+---
+
+## 📊 Monitoring & Metrics
+
+Built-in Prometheus metrics tracking:
+
+| Metric | Description |
+|--------|-------------|
+| `workflow_generation_duration` | Time to generate workflows |
+| `llm_request_latency` | LLM API response times |
+| `validation_checks_total` | Number of validation runs |
+| `failed_workflows_total` | Failed generation attempts |
+
+### Custom Metrics Dashboard
 ```bash
-PROMPT="Send me a daily digest of new GitHub issues at 9 AM"
+# View metrics endpoint
+curl http://localhost:8001/metrics
 ```
 
-### Multi-step Workflow
+---
+
+## 🧪 Development & Testing
+
+### Local Development Setup
 ```bash
-PROMPT="When a new customer signs up, add them to Mailchimp, create a Slack notification, and log to Google Sheets"
+# Install dependencies
+poetry install
+
+# Run tests
+pytest
+
+# Run with coverage
+pytest --cov=automation_assistant
+
+# Lint code
+flake8 automation_assistant/
+black automation_assistant/
 ```
 
-### Conditional Logic
-```bash
-PROMPT="Monitor RSS feed every hour, if new post contains 'AI' or 'automation', post to Twitter and send Telegram notification"
+### Adding New Features
+1. **New Node Types**: Update `prompts.py` with node templates
+2. **Custom Guardrails**: Extend `guardrails.py` validation logic
+3. **LLM Providers**: Add new clients in `llm_parser.py`
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `N8N_API_URL` | n8n instance URL | `http://n8n:5678` |
+| `N8N_USER_EMAIL` | n8n login email | Required |
+| `N8N_USER_PASSWORD` | n8n login password | Required |
+| `OPENAI_API_KEY` | OpenAI API key | Required |
+| `PROMPT` | Default workflow description | Optional |
+| `METRICS_PORT` | Prometheus metrics port | `8001` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
+
+### Advanced Configuration
+```python
+# prompts.py - Customize LLM behavior
+SYSTEM_PROMPT = """
+You are an expert n8n workflow designer.
+Create efficient, production-ready automations.
+Focus on error handling and maintainability.
+"""
 ```
 
-## 🏗️ Architecture
+---
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   User Prompt   │───▶│  LLM Processing  │───▶│  n8n Workflow   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │   Guardrails &   │
-                       │   Validation     │
-                       └──────────────────┘
-```
+## 🚀 Deployment
 
-### Core Components
-
-- **`prompts.py`** - Prompt engineering and node parameter configurations
-- **`llm_parser.py`** - LLM integration and system prompt management
-- **`workflow_builder.py`** - n8n node and connection logic
-- **`guardrails.py`** - Content moderation and validation
-- **`main.py`** - CLI entrypoint and orchestration
-
-## 📁 Project Structure
-
-```
-automation-assistant/
-├── automation_assistant/
-│   ├── prompts.py          # 🧠 Prompt engineering & configs
-│   ├── llm_parser.py       # 🤖 LLM integration
-│   ├── workflow_builder.py # 🔧 n8n workflow construction
-│   ├── guardrails.py       # 🛡️ Validation & moderation
-│   └── main.py            # 🚀 CLI entrypoint
-├── tests/                  # 🧪 Unit & integration tests
-├── docker-compose.yml      # 🐳 Service orchestration
-├── Dockerfile             # 📦 Container definition
-├── .github/workflows/     # ⚙️ CI/CD pipelines
-└── pyproject.toml         # 📋 Python dependencies
+### Docker Production Deployment
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+services:
+  automation-assistant:
+    build: .
+    environment:
+      - LOG_LEVEL=WARNING
+      - METRICS_PORT=8001
+    restart: unless-stopped
+    networks:
+      - production
 ```
 
-## 🧪 Testing & CI/CD
-
-### Automated Testing
-- **Unit Tests**: Individual component validation
-- **Integration Tests**: End-to-end workflow generation
-- **GitHub Actions**: Automated testing on every commit and PR
-
-### Quality Assurance
-```bash
-# Run full test suite
-poetry run pytest --cov=automation_assistant
-
-# Lint and format
-poetry run black .
-poetry run flake8
+### Kubernetes Deployment
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: automation-assistant
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: automation-assistant
+  template:
+    spec:
+      containers:
+      - name: assistant
+        image: automation-assistant:latest
+        ports:
+        - containerPort: 8001
 ```
 
-## 🗺️ Roadmap
-
-### ✅ Current (MVP)
-- [x] Natural language → n8n workflow generation
-- [x] Full containerization with Docker
-- [x] Basic guardrails and validation
-- [x] CI/CD with GitHub Actions
-
-### 🚧 In Progress
-- [ ] Extended node type support (Slack, Notion, Telegram, HTTP APIs)
-- [ ] Advanced validation and error handling
-- [ ] Performance optimization and caching
-
-### 🔮 Future
-- [ ] Multi-frontend support (Telegram bot, web dashboard)
-- [ ] User/project management with persistence
-- [ ] LLM orchestration with fallback logic
-- [ ] Vector database integration for prompt retrieval
-- [ ] Enterprise features (SSO, audit logs, advanced permissions)
+---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Here's how to get started:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. **🍴 Fork** the repository
+2. **🌟 Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **💻 Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **📤 Push** to the branch (`git push origin feature/amazing-feature`)
+5. **🔄 Open** a Pull Request
 
-## 📄 License
+### Development Guidelines
+- Follow PEP 8 style guide
+- Add tests for new features
+- Update documentation
+- Use conventional commits
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+---
 
-## 👥 Authors & Contributors
+## 📋 Roadmap
 
-- **[Your Name]** - *Initial work* - [@yourusername](https://github.com/ashishki)
-- **[Contributors]** - See [contributors](https://github.com/ashishki/automation-assistant/contributors)
+- [ ] 🌐 **Web Interface** - Beautiful UI for workflow generation
+- [ ] 🤖 **Multi-LLM Support** - Claude, Ollama, and more
+- [ ] 🔌 **Plugin System** - Extensible node library
+- [ ] 📱 **Mobile App** - iOS/Android workflow management
+- [ ] 🔄 **Workflow Templates** - Pre-built automation library
+- [ ] 🎯 **Smart Suggestions** - AI-powered workflow optimization
+- [ ] 📊 **Analytics Dashboard** - Usage insights and performance metrics
 
-## 🆘 Support
+---
 
-- 📚 [Documentation](https://docs.example.com)
-- 🐛 [Report Bug](https://github.com/ashishki/automation-assistant/issues)
-- 💡 [Request Feature](https://github.com/ashishki/automation-assistant/issues)
-- 💬 [Discussions](https://github.com/ashishki/automation-assistant/discussions)
+## ❓ FAQ
+
+<details>
+<summary><strong>🤔 How accurate are the generated workflows?</strong></summary>
+
+The assistant uses advanced prompt engineering and validation to ensure high accuracy. Most workflows work immediately, with complex scenarios requiring minor adjustments.
+</details>
+
+<details>
+<summary><strong>🔧 Can I customize the node templates?</strong></summary>
+
+Absolutely! Edit `prompts.py` to modify existing templates or add new ones. The system is designed to be highly customizable.
+</details>
+
+<details>
+<summary><strong>🌐 Does it work with n8n Cloud?</strong></summary>
+
+Yes! Just update your `N8N_API_URL` to point to your n8n Cloud instance and provide the appropriate credentials.
+</details>
+
+<details>
+<summary><strong>💰 What are the costs?</strong></summary>
+
+The main cost is OpenAI API usage. Typical workflow generation uses $0.01-0.05 per request, depending on complexity.
+</details>
+
+---
+
+
+
+---
+
+## 👨‍💻 Author
+
+**Artem Shishkin**
+- GitHub: [@ArtemShishkin](https://github.com/ashishki)
+- LinkedIn: [Artem Shishkin](https://linkedin.com/in/ashishki)
 
 ---
 
 <div align="center">
-  <p>Made with ❤️ by the Automation Assistant team</p>
-  <p>
-    <a href="https://github.com/ashishki/automation-assistant">⭐ Star us on GitHub</a> •
-    <a href="https://twitter.com/yourhandle">🐦 Follow on Twitter</a>
-  </p>
+
+### 🌟 Star this project if you find it useful!
+
+[⭐ Give it a star](https://github.com/ashishki/automation-assistant) • [🐛 Report bug](https://github.com/ahishki/automation-assistant/issues) • [💡 Request feature](https://github.com/ashishki/automation-assistant/issues)
+
+---
+
+**Made with ❤️ and lots of ☕**
+
 </div>
