@@ -121,6 +121,7 @@ def main():
     print("\n=== Latency Metrics ===")
     for step, latency in metrics.summary().items():
         print(f"{step}: {latency:.3f} sec")
+        
     # (Optional) write metrics to file for Prometheus server
     with open("metrics.prom", "w") as f:
         f.write(metrics.export_prometheus())

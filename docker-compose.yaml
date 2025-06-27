@@ -9,7 +9,7 @@ services:
       - N8N_RUNNERS_ENABLED=true
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
 
-      # ↓ эти две строчки заставят n8n отдавать сессионную куку по HTTP  
+        
       - N8N_SECURE_COOKIE=false  
       - N8N_COOKIE_SECURE=false
 
@@ -22,3 +22,4 @@ services:
       - .env
     depends_on:
       - n8n
+      
